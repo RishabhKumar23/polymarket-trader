@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 
 type Market = {
+    id: string;
     title: string;
     yesPrice: number;
     noPrice: number;
@@ -16,37 +17,42 @@ export default function MarketTable() {
     useEffect(() => {
         async function fetchMarkets() {
             try {
-                // Only call the internal API endpoint for both sources
-                const polyRes = await fetch('/api/markets');
-
-                // Check if the response is successful
-                if (!polyRes.ok) {
-                    throw new Error(`Failed to fetch data: ${polyRes.statusText}`);
+                const res = await fetch('/api/markets');
+                if (!res.ok) {
+                    throw new Error(`Failed to fetch data: ${res.statusText}`);
                 }
 
-                const { polyData, igData } = await polyRes.json();
+                const { polyData, igData } = await res.json();
+                const igEvents = igData.items || [];
+                console.log("Data for api", polyData.markets);
 
-                console.log('Full Infinite Games API Response:', igData);
-
-                // Extract events from the response
-                const igEvents = igData.items || []; // Ensure igEvents is an array
-
-                // Map over the Polymarket data and match it with Infinite Games events
                 const formatted = polyData.map((m: any) => {
+                    // console.log("Data for api", polyData);
+                    const market = Array.isArray(m.markets) ? m.markets[0] : null;
+                    console.log("Market Data", market); // -- Working
+
+                    const outcomes: { name: string;[key: string]: any }[] = Array.isArray(market?.outcomes) ? market.outcomes : [];
+                    console.log("outcome",outcomes);
+
+                    const yesOutcome = outcomes.find((o) => o.name === 'Yes');
+                    const noOutcome = outcomes.find((o) => o.name === 'No');
+                    console.log(yesOutcome, noOutcome);
+
+                    const yesPrice = yesOutcome?.lastPrice ?? yesOutcome?.price ?? 0;
+                    const noPrice = noOutcome?.lastPrice ?? noOutcome?.price ?? 0;
+
                     const igMatch = igEvents.find((ig: any) =>
-                        m.title.toLowerCase().includes(ig.title.toLowerCase().slice(0, 15)) // fuzzy match
+                        m.title.toLowerCase().includes(ig.title.toLowerCase().slice(0, 15))
                     );
 
                     const igProbability = igMatch?.probability ?? null;
-                    const delta = igProbability !== null ? (igProbability - (m.prices?.yes ?? 0)) : null;
+                    const delta = igProbability !== null ? igProbability - yesPrice : null;
 
-                    // Calculate signal strength and action based on delta
                     let signalStrength = 0;
                     let action = 'No Trade';
 
                     if (delta !== null) {
                         signalStrength = Math.abs(delta);
-
                         if (signalStrength > 0.03) {
                             action = delta > 0 ? 'Buy YES' : 'Buy NO';
                         }
@@ -55,10 +61,10 @@ export default function MarketTable() {
                     return {
                         id: m.id,
                         title: m.title,
-                        yesPrice: m.prices?.yes ?? 0,
-                        noPrice: m.prices?.no ?? 0,
-                        signalStrength: signalStrength,
-                        action: action,
+                        yesPrice, 
+                        noPrice,
+                        signalStrength,
+                        action,
                     };
                 });
 
@@ -66,7 +72,7 @@ export default function MarketTable() {
             } catch (err) {
                 console.error('Failed to fetch market data:', err);
             } finally {
-                setLoading(false); // Set loading to false when the data is fetched
+                setLoading(false);
             }
         }
 
@@ -80,7 +86,7 @@ export default function MarketTable() {
             <h1 className="text-2xl font-bold mb-4">Polymarket Trading Bot</h1>
             <table className="w-full border-collapse border border-gray-300">
                 <thead>
-                    <tr className="bg-gray-200">
+                    <tr className="">
                         <th className="p-2 border">Market</th>
                         <th className="p-2 border">Yes Price</th>
                         <th className="p-2 border">No Price</th>
@@ -89,12 +95,12 @@ export default function MarketTable() {
                     </tr>
                 </thead>
                 <tbody>
-                    {markets.map((market, idx) => (
-                        <tr key={idx} className="text-center">
+                    {markets.map((market) => (
+                        <tr key={market.id} className="text-center">
                             <td className="p-2 border">{market.title}</td>
-                            <td className="p-2 border">{market.yesPrice}</td>
-                            <td className="p-2 border">{market.noPrice}</td>
-                            <td className="p-2 border">{market.signalStrength}</td>
+                            <td className="p-2 border">{market.yesPrice.toFixed(2)}</td>
+                            <td className="p-2 border">{market.noPrice.toFixed(2)}</td>
+                            <td className="p-2 border">{market.signalStrength.toFixed(2)}</td>
                             <td className="p-2 border font-semibold">{market.action}</td>
                         </tr>
                     ))}

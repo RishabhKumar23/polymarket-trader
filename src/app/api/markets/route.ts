@@ -1,3 +1,4 @@
+// src/app/api/markets/route.ts
 import { NextResponse } from "next/server";
 
 export async function GET() {
